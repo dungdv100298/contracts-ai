@@ -1,0 +1,10 @@
+mongodb_data/
+node_modules/
+dist/
+.env
+*.log
+*.env
+*.env.local
+*.env.development.local
+*.env.test.local
+*.env.production.local
