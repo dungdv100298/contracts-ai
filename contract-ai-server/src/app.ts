@@ -6,8 +6,16 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import mongoose from "mongoose";
+import passport from "passport";
+import session from "express-session";
+import MongoStore from "connect-mongo";
+import "./config/passport";
+
+// ROUTES
+import authRoutes from "./routes/auth";
 
 const app = express();
+
 
 mongoose.connect(process.env.MONGODB_URI as string)
   .then(() => {
@@ -22,7 +30,24 @@ app.use(helmet());
 app.use(morgan("dev"));
 app.use(express.json());
 
-const PORT = process.env.PORT || 8080;
+app.use(session({
+  secret: process.env.SESSION_SECRET as string,
+  resave: false,
+  saveUninitialized: false,
+  store: MongoStore.create({ mongoUrl: process.env.MONGODB_URI }),
+  cookie: {
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+  },
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+app.use("/auth", authRoutes);
+
+const PORT = process.env.PORT || '8080';
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
