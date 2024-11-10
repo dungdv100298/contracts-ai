@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { UserButton } from "./shared/user-button";
 
 const navItems: { href: string; name: string }[] = [
   { href: "/dashboard", name: "Dashboard" },
@@ -12,7 +13,6 @@ const navItems: { href: string; name: string }[] = [
 
 export default function Header() {
   const pathname = usePathname();
-
   return (
     <header className="sticky top-0 px-4 z-50 w-full bg-background/95 backdrop-blur border-b">
       <div className="container flex items-center mx-auto h-16">
@@ -35,6 +35,7 @@ export default function Header() {
             ))}
           </nav>
         </div>
+        <UserButton />
       </div>
     </header>
   );
