@@ -13,7 +13,7 @@ import "./config/passport";
 
 // ROUTES
 import authRoutes from "./routes/auth";
-
+import contractsRoutes from "./routes/contracts";
 const app = express();
 
 
@@ -49,6 +49,7 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 app.use("/auth", authRoutes);
+app.use("/contracts", contractsRoutes);
 
 const PORT = process.env.PORT || '8080';
 
