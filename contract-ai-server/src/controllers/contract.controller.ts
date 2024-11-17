@@ -35,7 +35,7 @@ export const detectAndConfirmContractType = async (req: Request, res: Response) 
     const contractType = await detectContractType(textPDF);
 
     await redis.del(fileKey);
-    res.json({ contractType });
+    res.json({ detectedType: contractType });
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Internal server error" });
