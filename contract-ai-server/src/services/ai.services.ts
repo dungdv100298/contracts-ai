@@ -1,7 +1,7 @@
 import redis from "../config/redis";
-import { getDocument } from "pdfjs-dist";
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.js';
+import { FallbackAnalysis } from "../types";
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-
 const AI_MODEL = "gemini-pro";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const aiModel = genAI.getGenerativeModel({ model: AI_MODEL });
@@ -12,25 +12,26 @@ export const extractTextFromPDF = async (fileKey: string) => {
     if (!fileData) {
       throw new Error("File not found");
     }
+
     let fileBuffer: Uint8Array;
     if (Buffer.isBuffer(fileData)) {
       fileBuffer = new Uint8Array(fileData);
     } else if (typeof fileData === "object" && fileData !== null) {
+      // check if the the object has the expected structure
       const bufferData = fileData as { type?: string; data?: number[] };
-      if (bufferData.type === "Buffer") {
-        fileBuffer = new Uint8Array(bufferData.data as number[]);
+      if (bufferData.type === "Buffer" && Array.isArray(bufferData.data)) {
+        fileBuffer = new Uint8Array(bufferData.data);
       } else {
         throw new Error("Invalid file data");
       }
     } else {
       throw new Error("Invalid file data");
     }
-    
-    const pdfjs = await import('pdfjs-dist');
-    const pdfDoc = await pdfjs.getDocument({ data: fileBuffer }).promise;
+
+    const pdf = await getDocument({ data: fileBuffer }).promise;
     let text = "";
-    for (let i = 0; i < pdfDoc.numPages; i++) {
-      const page = await pdfDoc.getPage(i + 1);
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
       const content = await page.getTextContent();
       text += content.items.map((item: any) => item.str).join(" ") + "\n";
     }
@@ -38,11 +39,10 @@ export const extractTextFromPDF = async (fileKey: string) => {
   } catch (error) {
     console.log(error);
     throw new Error(
-      `Failed to extract text from PDF: ${JSON.stringify(error)}`
+      `Failed to extract text from PDF. Error: ${JSON.stringify(error)}`
     );
   }
 };
-
 export const detectContractType = async (
   contractText: string
 ): Promise<string> => {
@@ -108,5 +108,63 @@ export const analyzeContractWithAI = async (
 
   const results = await aiModel.generateContent(prompt);
   const response = await results.response;
-  return response.text().trim();
+  let text = response.text();
+  // remove any markdown formatting
+  text = text.replace(/```json\n?|\n?```/g, "").trim();
+
+  try {
+    // Attempt to fix common JSON errors
+    text = text.replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3'); // Ensure all keys are quoted
+    text = text.replace(/:\s*"([^"]*)"([^,}\]])/g, ': "$1"$2'); // Ensure all string values are properly quoted
+    text = text.replace(/,\s*}/g, "}"); // Remove trailing commas
+
+    const analysis = JSON.parse(text);
+    return analysis;
+  } catch (error) {
+    console.log("Error parsing JSON:", error);
+  }
+  const fallbackAnalysis: FallbackAnalysis = {
+    risks: [],
+    opportunities: [],
+    summary: "Error analyzing contract",
+  };
+   // Extract risks
+   const risksMatch = text.match(/"risks"\s*:\s*\[([\s\S]*?)\]/);
+   if (risksMatch) {
+     fallbackAnalysis.risks = risksMatch[1].split("},").map((risk: string) => {
+       const riskMatch = risk.match(/"risk"\s*:\s*"([^"]*)"/);
+       const explanationMatch = risk.match(/"explanation"\s*:\s*"([^"]*)"/);
+       return {
+         risk: riskMatch ? riskMatch[1] : "Unknown",
+         explanation: explanationMatch ? explanationMatch[1] : "Unknown",
+       };
+     });
+   }
+ 
+   //Extact opportunities
+   const opportunitiesMatch = text.match(/"opportunities"\s*:\s*\[([\s\S]*?)\]/);
+   if (opportunitiesMatch) {
+     fallbackAnalysis.opportunities = opportunitiesMatch[1]
+       .split("},")
+       .map((opportunity: string) => {
+         const opportunityMatch = opportunity.match(
+           /"opportunity"\s*:\s*"([^"]*)"/
+         );
+         const explanationMatch = opportunity.match(
+           /"explanation"\s*:\s*"([^"]*)"/
+         );
+         return {
+           opportunity: opportunityMatch ? opportunityMatch[1] : "Unknown",
+           explanation: explanationMatch ? explanationMatch[1] : "Unknown",
+         };
+       });
+   }
+ 
+   // Extract summary
+   const summaryMatch = text.match(/"summary"\s*:\s*"([^"]*)"/);
+   if (summaryMatch) {
+     fallbackAnalysis.summary = summaryMatch[1];
+   }
+ 
+   return fallbackAnalysis;
 };

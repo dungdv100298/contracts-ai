@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
 export const useCurrentUser = () => {
-  const { isLoading, isError, data: currentUser } = useQuery({
+  const { isLoading, isError, data: user } = useQuery({
     queryKey: ["current-user"],
     queryFn: async () => {
       try {
@@ -15,5 +15,5 @@ export const useCurrentUser = () => {
     },
   });
 
-  return { isLoading, isError, currentUser };
+  return { isLoading, isError, user };
 };

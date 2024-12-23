@@ -21,7 +21,7 @@ const googleSignIn = () => {
 };
 export function UserButton() {
   const router = useRouter();
-  const { currentUser } = useCurrentUser();
+  const { user } = useCurrentUser();
 
   const handleLogout = async () => {
     await logout();
@@ -33,14 +33,14 @@ export function UserButton() {
   
   return (
     <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
-      {currentUser ? (
+      {user ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="size-8 rounded-full">
               <Avatar>
-                <AvatarImage src={currentUser.avatar} />
+                <AvatarImage src={user.avatar} />
                 <AvatarFallback>
-                  {currentUser.displayName
+                  {user.displayName
                     ?.split(" ")
                     .map((n: string | undefined) => n?.[0])
                     .join("")}
@@ -50,9 +50,9 @@ export function UserButton() {
           </DropdownMenuTrigger>
           <DropdownMenuContent>
             <DropdownMenuItem className="flex flex-col items-start text-sm font-medium">
-              <div>{currentUser.displayName}</div>
+              <div>{user.displayName}</div>
               <div className="text-xs text-gray-500">
-                {currentUser.email}
+                {user.email}
               </div>
             </DropdownMenuItem>
             <DropdownMenuSeparator />

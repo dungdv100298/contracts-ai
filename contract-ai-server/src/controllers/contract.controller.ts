@@ -6,6 +6,7 @@ import { analyzeContractWithAI, detectContractType, extractTextFromPDF } from ".
 import ContractAnalysisSchema, {
   IContractAnalysis,
 } from "../models/contract.model";
+import { isValidMongoId } from "../utils";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -71,6 +72,31 @@ export const analyzeContract = async (req: Request, res: Response) => {
     });
 
     res.json(savedAnalysis);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const getContractById = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const user = req.user as IUser;
+
+  if (!isValidMongoId(id)) {
+    return res.status(400).json({ message: "Invalid contract ID" });
+  }
+
+  try {
+    const cachedContract = await redis.get(`${user._id}:${id}`);
+    if (cachedContract) {
+      return res.json(cachedContract);
+    }
+    const contract = await ContractAnalysisSchema.findOne({ _id: id, userId: user._id });
+    if (!contract) {
+      return res.status(404).json({ message: "Contract not found" });
+    }
+    await redis.set(`${user._id}:${id}`, JSON.stringify(contract));
+    res.json(contract);
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Internal server error" });

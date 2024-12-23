@@ -31,7 +31,7 @@ export function UploadModal({
     "upload" | "detecting" | "confirm" | "processing" | "done"
   >("upload");
 
-  const { mutate: detectContractType, isPending: isDetecting } = useMutation({
+  const { mutate: detectContractType } = useMutation({
     mutationFn: async ({ file }: { file: File }) => {
       const form = new FormData();
       form.append("contract", file);
@@ -45,9 +45,11 @@ export function UploadModal({
           },
         }
       );
+      console.log('response', response)
       return response.data.detectedType;
     },
     onSuccess: (data) => {
+      console.log('data', data)
       setDetectedType(data);
       setStep("confirm");
     },
@@ -67,8 +69,8 @@ export function UploadModal({
     }) => {
       const form = new FormData();
       form.append("contract", file);
-
-      const response = await axios.post("/contracts/analyze", form, {
+      form.append("contractType", contractType);
+      const response = await api.post("/contracts/analyze", form, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
@@ -77,6 +79,7 @@ export function UploadModal({
     },
     onSuccess: (data) => {
       setAnalysisResults(data);
+      setStep("done");
       onUploadComplete();
     },
     onError: () => {
@@ -112,6 +115,7 @@ export function UploadModal({
   const handleAnalyzeContract = () => {
     if (files.length > 0 && detectedType) {
       setStep("processing");
+      console.log('detectedType', detectedType)
       analyzeContract({ file: files[0], contractType: detectedType });
     }
   };
