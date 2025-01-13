@@ -1,6 +1,6 @@
 import express from "express";
 import { isAuthenticated } from "../middleware/auth";
-import { analyzeContract, detectAndConfirmContractType, getContractById, uploadMiddleware } from "../controllers/contract.controller";
+import { analyzeContract, detectAndConfirmContractType, getContractById, getUserContracts, uploadMiddleware } from "../controllers/contract.controller";
 import { handleErrors } from "../middleware/errors";
 
 const router = express.Router();
@@ -20,7 +20,13 @@ router.post(
 );
 
 router.get(
-  "/:id",
+  "/user-contracts",
+  isAuthenticated,
+  handleErrors(getUserContracts)
+);
+
+router.get(
+  "/contract/:id",
   isAuthenticated,
   handleErrors(getContractById)
 );

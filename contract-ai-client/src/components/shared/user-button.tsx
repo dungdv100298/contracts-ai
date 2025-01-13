@@ -12,17 +12,12 @@ import Link from "next/link";
 import { Icons } from "./icons";
 import { logout } from "@/lib/api";
 import { useRouter } from "next/navigation";
+import { useModalStore } from "@/store/zustand";
 
-const googleSignIn = () => {
-  return new Promise((resolve) => {
-    window.location.href = "http://localhost:8080/auth/google";
-    resolve(true);
-  });
-};
 export function UserButton() {
   const router = useRouter();
   const { user } = useCurrentUser();
-
+  const { openModal } = useModalStore();
   const handleLogout = async () => {
     await logout();
     window.location.reload();
@@ -77,7 +72,7 @@ export function UserButton() {
           </DropdownMenuContent>
         </DropdownMenu>
       ) : (
-        <Button onClick={googleSignIn}>Get Started</Button>
+        <Button onClick={() => openModal("connectAccountModal")}>Get Started</Button>
       )}
     </div>
   );

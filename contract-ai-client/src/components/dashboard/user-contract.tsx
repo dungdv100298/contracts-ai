@@ -1,20 +1,18 @@
-import { ContractAnalysis } from "@/types/contract.type";
 import { api } from "@/lib/api";
+import { ContractAnalysis } from "@/types";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-
 import {
   ColumnDef,
-  flexRender,
   getCoreRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  SortingState,
   useReactTable,
+  getPaginationRowModel,
+  SortingState,
+  flexRender,
 } from "@tanstack/react-table";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Card, CardTitle, CardHeader, CardContent } from "../ui/card";
 import {
   Table,
   TableBody,
@@ -36,57 +34,63 @@ import { MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import {
   AlertDialog,
+  AlertDialogDescription,
   AlertDialogAction,
   AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
   AlertDialogFooter,
+  AlertDialogTrigger,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+  AlertDialogContent,
+} from "../ui/alert-dialog";
 
-export default function UserContracts() {
-  const { data: contracts } = useQuery<ContractAnalysis[]>({
+export function UserContracts() {
+  const { data: contracts } = useQuery({
     queryKey: ["user-contracts"],
-    queryFn: () => fetchUserContracts(),
+    queryFn: getUserContracts,
   });
 
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-
+  const totalContracts = contracts?.length || 0;
+  const averageScore = contracts
+    ? contracts.reduce((acc, contract) => acc + contract.overallScore, 0) /
+      contracts.length
+    : 0;
+  const highRiskContracts = contracts
+    ? contracts.filter((contract) =>
+        contract.risks.some((risk) => risk.severity === "high")
+      ).length
+    : 0;
   const contractTypeColors: { [key: string]: string } = {
-    Employment: "bg-blue-100 text-blue-800 hover:bg-blue-200",
+    "Employment Contract": "bg-blue-100 text-blue-800 hover:bg-blue-200",
     "Non-Disclosure Agreement":
       "bg-green-100 text-green-800 hover:bg-green-200",
-    Sales: "bg-yellow-100 text-yellow-800 hover:bg-yellow-200",
-    Lease: "bg-emerald-100 text-emerald-800 hover:bg-emerald-200",
-    Services: "bg-pink-100 text-pink-800 hover:bg-pink-200",
+    "Sales Contract": "bg-yellow-100 text-yellow-800 hover:bg-yellow-200",
+    "Lease Contract": "bg-purple-100 text-purple-800 hover:bg-purple-200",
+    "Service Contract": "bg-pink-100 text-pink-800 hover:bg-pink-200",
     Other: "bg-gray-100 text-gray-800 hover:bg-gray-200",
   };
+
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState<boolean>(false);
 
   const columns: ColumnDef<ContractAnalysis>[] = [
     {
       accessorKey: "_id",
-      header: ({ column }) => {
-        return <Button variant={"ghost"}>Contract ID</Button>;
+      header: () => <div className="capitalize">Contract ID</div>,
+      cell: ({ row }) => {
+        return <div className="text-medium">{row.getValue("_id")}</div>;
       },
-      cell: ({ row }) => (
-        <div className="font-medium">{row.getValue<string>("_id")}</div>
-      ),
     },
     {
       accessorKey: "overallScore",
-      header: ({ column }) => {
-        return <Button variant={"ghost"}>Overall Score</Button>;
-      },
+      header: () => <div className="capitalize">Overall Score</div>,
       cell: ({ row }) => {
         const score = parseFloat(row.getValue("overallScore"));
         return (
           <Badge
             className="rounded-md"
             variant={
-              score > 75 ? "success" : score < 50 ? "destructive" : "secondary"
+              score > 70 ? "success" : score < 50 ? "destructive" : "secondary"
             }
           >
             {score.toFixed(2)} Overall Score
@@ -96,40 +100,38 @@ export default function UserContracts() {
     },
     {
       accessorKey: "contractType",
-      header: "Contract Type",
+      header: () => <div className="capitalize">Contract Type</div>,
       cell: ({ row }) => {
         const contractType = row.getValue("contractType") as string;
         const colorClass =
           contractTypeColors[contractType] || contractTypeColors["Other"];
         return (
-          <Badge className={cn("rounded-md", colorClass)}>{contractType}</Badge>
+          <Badge className={cn(colorClass, "text-sm")}>{contractType}</Badge>
         );
       },
     },
     {
-      id: "actions",
+      accessorKey: "action",
+      header: () => <div className="capitalize">Action</div>,
       cell: ({ row }) => {
-        const contract = row.original;
-
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant={"ghost"} className="size-8 p-0">
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="size-4" />
+              <Button variant="ghost" size="icon">
+                <MoreHorizontal />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem>
-                <Link href={`/dashboard/contract/${contract._id}`}>
-                  View Details
+                <Link href={`/dashboard/contract/${row.getValue("_id")}`}>
+                  View Contract
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <AlertDialog>
-                <AlertDialogTrigger asChild>
+                <AlertDialogTrigger>
                   <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                    <span className="text-destructive">Delete Contract</span>
+                    <span className="text-red-500">Delete</span>
                   </DropdownMenuItem>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
@@ -139,7 +141,7 @@ export default function UserContracts() {
                     </AlertDialogTitle>
                     <AlertDialogDescription>
                       This action cannot be undone. This will permanently delete
-                      your contract and remove your data from our servers.
+                      your account and remove your data from our servers.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -156,39 +158,24 @@ export default function UserContracts() {
   ];
 
   const table = useReactTable({
-    data: contracts ?? [],
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    onSortingChange: setSorting,
-    getSortedRowModel: getSortedRowModel(),
+    data: contracts || [],
+    columns: columns,
     state: {
       sorting,
     },
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onSortingChange: setSorting,
   });
-
-  const totalContracts = contracts?.length || 0;
-  const averageScore =
-    totalContracts > 0
-      ? (contracts?.reduce(
-          (sum, contract) => sum + (contract.overallScore ?? 0),
-          0
-        ) ?? 0) / totalContracts
-      : 0;
-
-  const highRiskContracts =
-    contracts?.filter((contract) =>
-      contract.risks.some((risk: any) => risk.severity === "high")
-    ).length ?? 0;
 
   return (
     <div className="container mx-auto p-6 space-y-8">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Your Contracts</h1>
+        <h1 className="text-2xl font-bold">Contracts</h1>
         <Button onClick={() => setIsUploadModalOpen(true)}>New Contract</Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -199,16 +186,16 @@ export default function UserContracts() {
             <div className="text-2xl font-bold">{totalContracts}</div>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Contracts
-            </CardTitle>
+            <CardTitle className="text-sm font-medium">Average Score</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{averageScore.toFixed(2)}</div>
+            <div className="text-2xl font-bold">{averageScore}</div>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -224,30 +211,25 @@ export default function UserContracts() {
       <div className="rounded-md border">
         <Table>
           <TableHeader>
-            {table.getHeaderGroups().map((headerGroup:any) => (
+            {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header: any) => {
-                  return (
-                    <TableHead key={header.id}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </TableHead>
-                  );
-                })}
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                  </TableHead>
+                ))}
               </TableRow>
             ))}
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                >
+                <TableRow key={row.id}>
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
                       {flexRender(
@@ -271,20 +253,21 @@ export default function UserContracts() {
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-end space-x-2 py-4">
+
+      <div className="flex justify-end items-center space-x-2 pt-4">
         <Button
-          variant={"outline"}
-          size={"sm"}
-          onClick={() => table.setPageIndex(0)}
+          variant="outline"
+          size="sm"
           disabled={!table.getCanPreviousPage()}
+          onClick={() => table.previousPage()}
         >
           Previous
         </Button>
         <Button
-          variant={"outline"}
-          size={"sm"}
-          onClick={() => table.nextPage()}
+          variant="outline"
+          size="sm"
           disabled={!table.getCanNextPage()}
+          onClick={() => table.nextPage()}
         >
           Next
         </Button>
@@ -298,7 +281,7 @@ export default function UserContracts() {
   );
 }
 
-async function fetchUserContracts(): Promise<ContractAnalysis[]> {
+async function getUserContracts(): Promise<ContractAnalysis[]> {
   const response = await api.get("/contracts/user-contracts");
   return response.data;
 }

@@ -3,6 +3,9 @@ import localFont from "next/font/local";
 import "./globals.css";
 import Header from "@/components/header";
 import { ReactQueryProvider } from "@/providers/tanstack/react-query-provider";
+import { ReactNode } from "react";
+import { ModalProvider } from "@/components/modals/modal-provider";
+import { Toaster } from "@/components/ui/sonner";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -23,16 +26,18 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
+  children: ReactNode;
 }>) {
   return (
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        suppressHydrationWarning
       >
         <ReactQueryProvider>
           <Header />
-          {children}
+          <ModalProvider>{children}</ModalProvider>
+          <Toaster />
         </ReactQueryProvider>
       </body>
     </html>

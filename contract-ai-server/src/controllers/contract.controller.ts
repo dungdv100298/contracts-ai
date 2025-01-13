@@ -56,9 +56,8 @@ export const analyzeContract = async (req: Request, res: Response) => {
     const fileKey = `${user._id}:${Date.now()}`;
     await redis.set(fileKey, req.file.buffer);
     await redis.expire(fileKey, 3600); // 1 hour
-
     const textPDF = await extractTextFromPDF(fileKey);
-    let analysis = await analyzeContractWithAI(textPDF, contractType)
+    let analysis = await analyzeContractWithAI(textPDF, contractType, user.isPremium ? "premium" : "free")
     if (!analysis.summary || !analysis.risks || !analysis.opportunities) {
       throw new Error("Failed to analyze contract");
     }
@@ -97,6 +96,22 @@ export const getContractById = async (req: Request, res: Response) => {
     }
     await redis.set(`${user._id}:${id}`, JSON.stringify(contract));
     res.json(contract);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const getUserContracts = async (req: Request, res: Response) => {
+  try {
+    const user = req.user as IUser;
+    interface QueryType {
+      userId: string;
+    }
+    console.log('user', user)
+    const query: QueryType = { userId: user._id as string };
+    const contracts = await ContractAnalysisSchema.find(query).sort({ createdAt: -1 });
+    res.json(contracts);
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Internal server error" });

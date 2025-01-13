@@ -1,5 +1,5 @@
 import redis from "../config/redis";
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.js';
+import { getDocument } from "pdfjs-dist/legacy/build/pdf.js";
 import { FallbackAnalysis } from "../types";
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const AI_MODEL = "gemini-pro";
@@ -60,9 +60,12 @@ export const detectContractType = async (
 
 export const analyzeContractWithAI = async (
   contractText: string,
-  contractType: string
+  contractType: string,
+  tier: "premium" | "free"
 ) => {
-  let prompt = `
+  let prompt;
+  if (tier === "premium") {
+    prompt = `
     Analyze the following ${contractType} contract and provide:
     1. A list of at least 10 potential risks for the party receiving the contract, each with a brief explanation and severity level (low, medium, high).
     2. A list of at least 10 potential opportunities or benefits for the receiving party, each with a brief explanation and impact level (low, medium, high).
@@ -98,6 +101,23 @@ export const analyzeContractWithAI = async (
       "specificClauses": "Summary of clauses specific to this contract type"
     }
       `;
+  } else {
+    prompt = `
+    Analyze the following ${contractType} contract and provide:
+    1. A list of at least 5 potential risks for the party receiving the contract, each with a brief explanation and severity level (low, medium, high).
+    2. A list of at least 5 potential opportunities or benefits for the receiving party, each with a brief explanation and impact level (low, medium, high).
+    3. A brief summary of the contract
+    4. An overall score from 1 to 100, with 100 being the highest. This score represents the overall favorability of the contract based on the identified risks and opportunities.
+
+     {
+      "risks": [{"risk": "Risk description", "explanation": "Brief explanation"}],
+      "opportunities": [{"opportunity": "Opportunity description", "explanation": "Brief explanation"}],
+      "summary": "Brief summary of the contract",
+      "overallScore": "Overall score from 1 to 100"
+    }
+`;
+  }
+
   prompt += `
     Important: Provide only the JSON object in your response, without any additional text or formatting. 
     
@@ -109,6 +129,7 @@ export const analyzeContractWithAI = async (
   const results = await aiModel.generateContent(prompt);
   const response = await results.response;
   let text = response.text();
+
   // remove any markdown formatting
   text = text.replace(/```json\n?|\n?```/g, "").trim();
 
@@ -123,48 +144,66 @@ export const analyzeContractWithAI = async (
   } catch (error) {
     console.log("Error parsing JSON:", error);
   }
+
+  interface IRisk {
+    risk: string;
+    explanation: string;
+  }
+
+  interface IOpportunity {
+    opportunity: string;
+    explanation: string;
+  }
+
+  interface FallbackAnalysis {
+    risks: IRisk[];
+    opportunities: IOpportunity[];
+    summary: string;
+  }
+
   const fallbackAnalysis: FallbackAnalysis = {
     risks: [],
     opportunities: [],
     summary: "Error analyzing contract",
   };
-   // Extract risks
-   const risksMatch = text.match(/"risks"\s*:\s*\[([\s\S]*?)\]/);
-   if (risksMatch) {
-     fallbackAnalysis.risks = risksMatch[1].split("},").map((risk: string) => {
-       const riskMatch = risk.match(/"risk"\s*:\s*"([^"]*)"/);
-       const explanationMatch = risk.match(/"explanation"\s*:\s*"([^"]*)"/);
-       return {
-         risk: riskMatch ? riskMatch[1] : "Unknown",
-         explanation: explanationMatch ? explanationMatch[1] : "Unknown",
-       };
-     });
-   }
- 
-   //Extact opportunities
-   const opportunitiesMatch = text.match(/"opportunities"\s*:\s*\[([\s\S]*?)\]/);
-   if (opportunitiesMatch) {
-     fallbackAnalysis.opportunities = opportunitiesMatch[1]
-       .split("},")
-       .map((opportunity: string) => {
-         const opportunityMatch = opportunity.match(
-           /"opportunity"\s*:\s*"([^"]*)"/
-         );
-         const explanationMatch = opportunity.match(
-           /"explanation"\s*:\s*"([^"]*)"/
-         );
-         return {
-           opportunity: opportunityMatch ? opportunityMatch[1] : "Unknown",
-           explanation: explanationMatch ? explanationMatch[1] : "Unknown",
-         };
-       });
-   }
- 
-   // Extract summary
-   const summaryMatch = text.match(/"summary"\s*:\s*"([^"]*)"/);
-   if (summaryMatch) {
-     fallbackAnalysis.summary = summaryMatch[1];
-   }
- 
-   return fallbackAnalysis;
+
+  // Extract risks
+  const risksMatch = text.match(/"risks"\s*:\s*\[([\s\S]*?)\]/);
+  if (risksMatch) {
+    fallbackAnalysis.risks = risksMatch[1].split("},").map((risk: string) => {
+      const riskMatch = risk.match(/"risk"\s*:\s*"([^"]*)"/);
+      const explanationMatch = risk.match(/"explanation"\s*:\s*"([^"]*)"/);
+      return {
+        risk: riskMatch ? riskMatch[1] : "Unknown",
+        explanation: explanationMatch ? explanationMatch[1] : "Unknown",
+      };
+    });
+  }
+
+  //Extact opportunities
+  const opportunitiesMatch = text.match(/"opportunities"\s*:\s*\[([\s\S]*?)\]/);
+  if (opportunitiesMatch) {
+    fallbackAnalysis.opportunities = opportunitiesMatch[1]
+      .split("},")
+      .map((opportunity: string) => {
+        const opportunityMatch = opportunity.match(
+          /"opportunity"\s*:\s*"([^"]*)"/
+        );
+        const explanationMatch = opportunity.match(
+          /"explanation"\s*:\s*"([^"]*)"/
+        );
+        return {
+          opportunity: opportunityMatch ? opportunityMatch[1] : "Unknown",
+          explanation: explanationMatch ? explanationMatch[1] : "Unknown",
+        };
+      });
+  }
+
+  // Extract summary
+  const summaryMatch = text.match(/"summary"\s*:\s*"([^"]*)"/);
+  if (summaryMatch) {
+    fallbackAnalysis.summary = summaryMatch[1];
+  }
+
+  return fallbackAnalysis;
 };

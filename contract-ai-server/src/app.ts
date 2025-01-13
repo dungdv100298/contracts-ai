@@ -14,6 +14,9 @@ import "./config/passport";
 // ROUTES
 import authRoutes from "./routes/auth";
 import contractsRoutes from "./routes/contracts";
+import paymentsRoutes from "./routes/payments";
+import { handleWebhook } from "./controllers/payment.controller";
+
 const app = express();
 
 
@@ -31,6 +34,12 @@ app.use(cors({
 }));
 app.use(helmet());
 app.use(morgan("dev"));
+
+app.post("/payments/webhook",
+  express.raw({ type: "application/json" }),
+  handleWebhook
+ );
+
 app.use(express.json());
 
 app.use(session({
@@ -50,6 +59,7 @@ app.use(passport.session());
 
 app.use("/auth", authRoutes);
 app.use("/contracts", contractsRoutes);
+app.use("/payments", paymentsRoutes);
 
 const PORT = process.env.PORT || '8080';
 
