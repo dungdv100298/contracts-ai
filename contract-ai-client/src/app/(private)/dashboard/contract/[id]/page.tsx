@@ -1,11 +1,12 @@
 import { ContractResults } from "./_components/contract-results";
 
 type ContractPageProps = {
-  readonly params: {
+  readonly params: Promise<{
     id: string;
-  };
+  }>;
 };
 
-export default function ContractPage({ params }: ContractPageProps) {
-  return <ContractResults contractId={params.id} />;
+export default async function ContractPage({ params }: ContractPageProps) {
+  const { id } = await params;
+  return <ContractResults contractId={id} />;
 }
