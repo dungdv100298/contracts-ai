@@ -23,6 +23,8 @@ const app = express();
 mongoose.connect(process.env.MONGODB_URI as string, {
   ssl: true,
   tls: true,
+  tlsAllowInvalidCertificates: true,
+  tlsAllowInvalidHostnames: process.env.NODE_ENV !== "production",
 })
   .then(() => {
     console.log("Connected to MongoDB");
