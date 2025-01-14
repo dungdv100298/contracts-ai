@@ -25,7 +25,6 @@ export function UploadModal({
   const router = useRouter();
   const { setAnalysisResults } = useContractStore();
   const [detectedType, setDetectedType] = useState<string>("");
-  const [error, setError] = useState<string>("");
   const [files, setFiles] = useState<File[]>([]);
   const [step, setStep] = useState<
     "upload" | "detecting" | "confirm" | "processing" | "done"
@@ -54,7 +53,6 @@ export function UploadModal({
       setStep("confirm");
     },
     onError: () => {
-      setError("Failed to detect contract type");
       setStep("upload");
     },
   });
@@ -83,7 +81,6 @@ export function UploadModal({
       onUploadComplete();
     },
     onError: () => {
-      setError("Failed to analyze contract");
       setStep("upload");
     },
   });
@@ -92,7 +89,6 @@ export function UploadModal({
     if (acceptedFiles.length > 0) {
       setFiles(acceptedFiles);
     } else {
-      setError("No files selected");
     }
   }, []);
 
@@ -124,7 +120,6 @@ export function UploadModal({
     setFiles([]);
     setDetectedType("");
     setStep("upload");
-    setError("");
     onClose();
   };
 
