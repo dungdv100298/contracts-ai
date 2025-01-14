@@ -18,7 +18,7 @@ import { Label } from "../ui/label";
 
 const googleSignIn = () => {
   return new Promise((resolve) => {
-    window.location.href = "http://localhost:8080/auth/google";
+    window.location.href = `${process.env.NEXT_PUBLIC_SERVER_URL}/auth/google`;
     resolve(true);
   });
 };
