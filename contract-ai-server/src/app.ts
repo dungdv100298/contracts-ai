@@ -20,7 +20,10 @@ import { handleWebhook } from "./controllers/payment.controller";
 const app = express();
 
 
-mongoose.connect(process.env.MONGODB_URI as string)
+mongoose.connect(process.env.MONGODB_URI as string, {
+  ssl: true,
+  tls: true,
+})
   .then(() => {
     console.log("Connected to MongoDB");
   })
