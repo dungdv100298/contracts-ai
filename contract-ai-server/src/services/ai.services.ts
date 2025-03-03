@@ -1,10 +1,10 @@
 import redis from "../config/redis";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.js";
 import { FallbackAnalysis } from "../types";
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-const AI_MODEL = "gemini-pro";
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const aiModel = genAI.getGenerativeModel({ model: AI_MODEL });
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
 
 export const extractTextFromPDF = async (fileKey: string) => {
   try {
@@ -43,19 +43,23 @@ export const extractTextFromPDF = async (fileKey: string) => {
     );
   }
 };
-export const detectContractType = async (
-  contractText: string
-): Promise<string> => {
-  const prompt = `
+
+export const detectContractType = async (contractText: string): Promise<string> => {
+  try {
+    const result = await model.generateContent(
+      `
     Analyze the following text and determine the type of contract it is.
     Provide only the contract type as a single string(e.g. "Employment", "Non-Disclosure Agreement", "Sales", "Lease" etc.).
     Do not include any additional explanation or context.
     Contract text:
     ${contractText.substring(0, 2000)}
-  `;
-  const results = await aiModel.generateContent(prompt);
-  const response = await results.response;
-  return response.text().trim();
+  `
+    );
+    return result.response.text().trim();
+  } catch (error) {
+    console.error("Error detecting contract type:", error);
+    return "Unknown";
+  }
 };
 
 export const analyzeContractWithAI = async (
@@ -63,9 +67,10 @@ export const analyzeContractWithAI = async (
   contractType: string,
   tier: "premium" | "free"
 ) => {
-  let prompt;
-  if (tier === "premium") {
-    prompt = `
+  try {
+    let prompt;
+    if (tier === "premium") {
+      prompt = `
     Analyze the following ${contractType} contract and provide:
     1. A list of at least 10 potential risks for the party receiving the contract, each with a brief explanation and severity level (low, medium, high).
     2. A list of at least 10 potential opportunities or benefits for the receiving party, each with a brief explanation and impact level (low, medium, high).
@@ -101,8 +106,8 @@ export const analyzeContractWithAI = async (
       "specificClauses": "Summary of clauses specific to this contract type"
     }
       `;
-  } else {
-    prompt = `
+    } else {
+      prompt = `
     Analyze the following ${contractType} contract and provide:
     1. A list of at least 5 potential risks for the party receiving the contract, each with a brief explanation and severity level (low, medium, high).
     2. A list of at least 5 potential opportunities or benefits for the receiving party, each with a brief explanation and impact level (low, medium, high).
@@ -116,9 +121,9 @@ export const analyzeContractWithAI = async (
       "overallScore": "Overall score from 1 to 100"
     }
 `;
-  }
+    }
 
-  prompt += `
+    prompt += `
     Important: Provide only the JSON object in your response, without any additional text or formatting. 
     
     
@@ -126,84 +131,91 @@ export const analyzeContractWithAI = async (
     ${contractText}
     `;
 
-  const results = await aiModel.generateContent(prompt);
-  const response = await results.response;
-  let text = response.text();
+    const result = await model.generateContent(prompt);
+    let text = result.response.text();
 
-  // remove any markdown formatting
-  text = text.replace(/```json\n?|\n?```/g, "").trim();
+    // remove any markdown formatting
+    text = text.replace(/```json\n?|\n?```/g, "").trim();
 
-  try {
-    // Attempt to fix common JSON errors
-    text = text.replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3'); // Ensure all keys are quoted
-    text = text.replace(/:\s*"([^"]*)"([^,}\]])/g, ': "$1"$2'); // Ensure all string values are properly quoted
-    text = text.replace(/,\s*}/g, "}"); // Remove trailing commas
+    try {
+      // Attempt to fix common JSON errors
+      text = text.replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3'); // Ensure all keys are quoted
+      text = text.replace(/:\s*"([^"]*)"([^,}\]])/g, ': "$1"$2'); // Ensure all string values are properly quoted
+      text = text.replace(/,\s*}/g, "}"); // Remove trailing commas
 
-    const analysis = JSON.parse(text);
-    return analysis;
-  } catch (error) {
-    console.log("Error parsing JSON:", error);
-  }
+      const analysis = JSON.parse(text);
+      return analysis;
+    } catch (error) {
+      console.log("Error parsing JSON:", error);
+    }
 
-  interface IRisk {
-    risk: string;
-    explanation: string;
-  }
+    interface IRisk {
+      risk: string;
+      explanation: string;
+    }
 
-  interface IOpportunity {
-    opportunity: string;
-    explanation: string;
-  }
+    interface IOpportunity {
+      opportunity: string;
+      explanation: string;
+    }
 
-  interface FallbackAnalysis {
-    risks: IRisk[];
-    opportunities: IOpportunity[];
-    summary: string;
-  }
+    interface FallbackAnalysis {
+      risks: IRisk[];
+      opportunities: IOpportunity[];
+      summary: string;
+    }
 
-  const fallbackAnalysis: FallbackAnalysis = {
-    risks: [],
-    opportunities: [],
-    summary: "Error analyzing contract",
-  };
+    const fallbackAnalysis: FallbackAnalysis = {
+      risks: [],
+      opportunities: [],
+      summary: "Error analyzing contract",
+    };
 
-  // Extract risks
-  const risksMatch = text.match(/"risks"\s*:\s*\[([\s\S]*?)\]/);
-  if (risksMatch) {
-    fallbackAnalysis.risks = risksMatch[1].split("},").map((risk: string) => {
-      const riskMatch = risk.match(/"risk"\s*:\s*"([^"]*)"/);
-      const explanationMatch = risk.match(/"explanation"\s*:\s*"([^"]*)"/);
-      return {
-        risk: riskMatch ? riskMatch[1] : "Unknown",
-        explanation: explanationMatch ? explanationMatch[1] : "Unknown",
-      };
-    });
-  }
-
-  //Extact opportunities
-  const opportunitiesMatch = text.match(/"opportunities"\s*:\s*\[([\s\S]*?)\]/);
-  if (opportunitiesMatch) {
-    fallbackAnalysis.opportunities = opportunitiesMatch[1]
-      .split("},")
-      .map((opportunity: string) => {
-        const opportunityMatch = opportunity.match(
-          /"opportunity"\s*:\s*"([^"]*)"/
-        );
-        const explanationMatch = opportunity.match(
-          /"explanation"\s*:\s*"([^"]*)"/
-        );
+    // Extract risks
+    const risksMatch = text.match(/"risks"\s*:\s*\[([\s\S]*?)\]/);
+    if (risksMatch) {
+      fallbackAnalysis.risks = risksMatch[1].split("},").map((risk: string) => {
+        const riskMatch = risk.match(/"risk"\s*:\s*"([^"]*)"/);
+        const explanationMatch = risk.match(/"explanation"\s*:\s*"([^"]*)"/);
         return {
-          opportunity: opportunityMatch ? opportunityMatch[1] : "Unknown",
+          risk: riskMatch ? riskMatch[1] : "Unknown",
           explanation: explanationMatch ? explanationMatch[1] : "Unknown",
         };
       });
-  }
+    }
 
-  // Extract summary
-  const summaryMatch = text.match(/"summary"\s*:\s*"([^"]*)"/);
-  if (summaryMatch) {
-    fallbackAnalysis.summary = summaryMatch[1];
-  }
+    //Extact opportunities
+    const opportunitiesMatch = text.match(/"opportunities"\s*:\s*\[([\s\S]*?)\]/);
+    if (opportunitiesMatch) {
+      fallbackAnalysis.opportunities = opportunitiesMatch[1]
+        .split("},")
+        .map((opportunity: string) => {
+          const opportunityMatch = opportunity.match(
+            /"opportunity"\s*:\s*"([^"]*)"/
+          );
+          const explanationMatch = opportunity.match(
+            /"explanation"\s*:\s*"([^"]*)"/
+          );
+          return {
+            opportunity: opportunityMatch ? opportunityMatch[1] : "Unknown",
+            explanation: explanationMatch ? explanationMatch[1] : "Unknown",
+          };
+        });
+    }
 
-  return fallbackAnalysis;
+    // Extract summary
+    const summaryMatch = text.match(/"summary"\s*:\s*"([^"]*)"/);
+    if (summaryMatch) {
+      fallbackAnalysis.summary = summaryMatch[1];
+    }
+
+    return fallbackAnalysis;
+  } catch (error) {
+    console.error("Error analyzing contract:", error);
+    return {
+      risks: [],
+      opportunities: [],
+      summary: "Error analyzing contract",
+    };
+  }
 };
